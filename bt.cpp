@@ -20,6 +20,16 @@
 #include "bsp/board_api.h"
 #include "pico/sync.h"
 #include "classic/sdp_server.h"
+static hci_con_handle_t current_con_handle = HCI_CON_HANDLE_INVALID;
+void bt_disconnect_device() {
+    if (current_con_handle != HCI_CON_HANDLE_INVALID) {
+        printf("[BT] Manually disconnecting handle 0x%04X...\n", current_con_handle);
+        // 0x13 代表远程用户终止连接 (Remote User Terminated Connection)
+        gap_disconnect(current_con_handle); 
+    } else {
+        printf("[BT] No active connection to disconnect.\n");
+    }
+}
 
 static btstack_packet_callback_registration_t hci_event_callback_registration, l2cap_event_callback_registration;
 
@@ -186,11 +196,11 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
         case HCI_EVENT_CONNECTION_COMPLETE: {
             const uint8_t status = hci_event_connection_complete_get_status(packet);
             if (status == 0) {
-                const hci_con_handle_t handle = hci_event_connection_complete_get_connection_handle(packet);
+                current_con_handle = hci_event_connection_complete_get_connection_handle(packet);
                 hci_event_connection_complete_get_bd_addr(packet, current_device_addr);
-                printf("[HCI] ACL connected handle=0x%04X\n", handle);
-                printf("[HCI] Request authentication on handle=0x%04X\n", handle);
-                hci_send_cmd(&hci_authentication_requested, handle);
+                printf("[HCI] ACL connected handle=0x%04X\n", current_con_handle);
+                printf("[HCI] Request authentication on handle=0x%04X\n", current_con_handle);
+                hci_send_cmd(&hci_authentication_requested, current_con_handle);
             } else {
                 device_found = false;
                 new_pair = false;
@@ -286,6 +296,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
         }
 
         case HCI_EVENT_DISCONNECTION_COMPLETE: {
+            current_con_handle = HCI_CON_HANDLE_INVALID;
             gap_connectable_control(1);
             gap_discoverable_control(1);
             const uint8_t reason = hci_event_disconnection_complete_get_reason(packet);
@@ -364,7 +375,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                         0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa,
                         0x7, 0x0, 0x0, 0x2, 0x1,
                         0x00,
-                        0xff, 0xd7, 0x00 // RGB LED: R, G, B
+                        31, 0, 27 // RGB LED: R, G, B
                     };
                     memcpy(report32 + 2, packet_0x10, sizeof(packet_0x10));
                     bt_write(report32, sizeof(report32));

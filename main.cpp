@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/cyw43_arch.h"
-
+#include "hardware/watchdog.h"
 #include "bsp/board_api.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
@@ -105,10 +105,12 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
     #define AXIS_CENTER 128 // 中心位置
     #define AXIS_DEAD_ZONE 6 // 死区
     #define REPORT_RATE 100 // 报告率
-    #define ls_map_wheel_speed 0.064f // 滚轮映射速度系数
-    #define rs_map_mouse_speed 8.0f // 鼠标映射速度系数
-    #define touchpad_map_wheel_speed 0.03f // 触摸板映射速度系数
-    #define touchpad_map_mouse_speed 1.0f // 触摸板映射速度系数
+    
+    float ls_map_wheel_speed = 0.064f; // 滚轮映射速度系数
+    float rs_map_mouse_speed = 8.0f; // 鼠标映射速度系数
+    float touchpad_map_wheel_speed = 0.03f; // 触摸板映射速度系数
+    float touchpad_map_mouse_speed = 1.0f; // 触摸板映射速度系数
+    
     const uint64_t INTERVAL_US = 100000 / REPORT_RATE;
     absolute_time_t next_run_time = get_absolute_time();
     float current_speed_x = 0;
@@ -155,65 +157,78 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
                 // debug("current_speed_x:%.2f current_speed_y:%.2f\n", current_speed_x, current_speed_y);
             }
             /*----------按键部分----------*/
-            if(ds_now.buttons.rt && !ds_last.buttons.rt){
-                hid_mouse_button_down(MouseBtnLeft);
-            }
-            if(!ds_now.buttons.rt && ds_last.buttons.rt){
-                hid_mouse_button_up(MouseBtnLeft);
-            }
-            if(ds_now.buttons.lt && !ds_last.buttons.lt){
-                hid_mouse_button_down(MouseBtnRight);
-            }
-            if(!ds_now.buttons.lt && ds_last.buttons.lt){
-                hid_mouse_button_up(MouseBtnRight);
-            }
-            if(ds_now.buttons.a && !ds_last.buttons.a){
-                hid_key_down(KeyEnter);
-            }
-            if(!ds_now.buttons.a && ds_last.buttons.a){
-                hid_key_up(KeyEnter);
-            }
-            if(ds_now.buttons.b && !ds_last.buttons.b){
-                hid_key_down(KeyEscape);
-            }
-            if(!ds_now.buttons.b && ds_last.buttons.b){
-                hid_key_up(KeyEscape);
-            }
-            if(ds_now.buttons.touchpad && !ds_last.buttons.touchpad){
-                hid_mouse_button_down(MouseBtnLeft);
-            }
-            if(!ds_now.buttons.touchpad && ds_last.buttons.touchpad){
-                hid_mouse_button_up(MouseBtnLeft);
-            }
-            /*----------DPAD部分----------*/
             uint8_t dapd_now = 0x098C46231ULL >> (ds_now.buttons.dpad * 4) & 0x0f;
             uint8_t dapd_last = 0x098C46231ULL >> (ds_last.buttons.dpad * 4) & 0x0f;
-            uint8_t pressed = dapd_now & ~dapd_last;
-            uint8_t released = ~dapd_now & dapd_last;
-            if(pressed & DPAD_UP){
-              hid_key_down(KeyUp);
+            uint8_t dpad_pressed = dapd_now & ~dapd_last;
+            uint8_t dpad_released = ~dapd_now & dapd_last;
+
+            if(ds_now.buttons.ps){//PS按下的状态
+                
+            }else{
+                if(ds_now.buttons.rt && !ds_last.buttons.rt){
+                    hid_mouse_button_down(MouseBtnLeft);
+                }
+                if(!ds_now.buttons.rt && ds_last.buttons.rt){
+                    hid_mouse_button_up(MouseBtnLeft);
+                }
+                if(ds_now.buttons.lt && !ds_last.buttons.lt){
+                    hid_mouse_button_down(MouseBtnRight);
+                }
+                if(!ds_now.buttons.lt && ds_last.buttons.lt){
+                    hid_mouse_button_up(MouseBtnRight);
+                }
+                if(ds_now.buttons.a && !ds_last.buttons.a){
+                    hid_key_down(KeyEnter);
+                }
+                if(!ds_now.buttons.a && ds_last.buttons.a){
+                    hid_key_up(KeyEnter);
+                }
+                if(ds_now.buttons.b && !ds_last.buttons.b){
+                    hid_key_down(KeyEscape);
+                }
+                if(!ds_now.buttons.b && ds_last.buttons.b){
+                    hid_key_up(KeyEscape);
+                }
+                if(ds_now.buttons.touchpad && !ds_last.buttons.touchpad){
+                    hid_mouse_button_down(MouseBtnLeft);
+                }
+                if(!ds_now.buttons.touchpad && ds_last.buttons.touchpad){
+                    hid_mouse_button_up(MouseBtnLeft);
+                }
+                if(!ds_now.buttons.mute && ds_last.buttons.mute){
+                    debug("Mute button released, restarting device.\n");
+                    sleep_ms(100);
+                    watchdog_reboot(0, 0, 0);
+                }
+                /*----------DPAD部分----------*/
+                if(dpad_pressed & DPAD_UP){
+                hid_key_down(KeyUp);
+                }
+                if(dpad_released & DPAD_UP){
+                hid_key_up(KeyUp);
+                }
+                if(dpad_pressed & DPAD_RIGHT){
+                hid_key_down(KeyRight);
+                }
+                if(dpad_released & DPAD_RIGHT){
+                hid_key_up(KeyRight);
+                }
+                if(dpad_pressed & DPAD_DOWN){
+                hid_key_down(KeyDown);
+                }
+                if(dpad_released & DPAD_DOWN){
+                hid_key_up(KeyDown);
+                }
+                if(dpad_pressed & DPAD_LEFT){
+                hid_key_down(KeyLeft);
+                }
+                if(dpad_released & DPAD_LEFT){
+                hid_key_up(KeyLeft);
+                }
             }
-            if(released & DPAD_UP){
-              hid_key_up(KeyUp);
-            }
-            if(pressed & DPAD_RIGHT){
-              hid_key_down(KeyRight);
-            }
-            if(released & DPAD_RIGHT){
-              hid_key_up(KeyRight);
-            }
-            if(pressed & DPAD_DOWN){
-              hid_key_down(KeyDown);
-            }
-            if(released & DPAD_DOWN){
-              hid_key_up(KeyDown);
-            }
-            if(pressed & DPAD_LEFT){
-              hid_key_down(KeyLeft);
-            }
-            if(released & DPAD_LEFT){
-              hid_key_up(KeyLeft);
-            }
+
+
+           
             /*----------触摸板部分----------*/
             bool state1 = (ds_now.points_1.contact & 0x80) == 0;
             uint8_t id1 = ds_now.points_1.contact & 0x7f;
