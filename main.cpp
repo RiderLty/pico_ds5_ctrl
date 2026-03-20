@@ -56,7 +56,7 @@ enum  {
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 
 char display_buffer[500];
-static struct dualsense_input_report ds , ds_last;
+static struct dualsense_input_report ds ,ds_now, ds_last;
 void display_dsinfo(){
   sprintf(display_buffer, "x:%03d y:%03d rx:%03d ry:%03d lt:%03d rt:%03d a:%d b:%d y:%d x:%d lb:%d rb:%d lt:%d rt:%d back:%d start:%d ls:%d rs:%d ps:%d touchpad:%d mute:%d dpad:%d gyro_x:%08d gyro_y:%08d gyro_z:%08d accel_x:%08d accel_y:%08d accel_z:%08d sensor_timestamp:%08d touchpad: points_1[%08b]:%06d,%06d points_2[%08b]:%06d,%06d\r\n\0", ds.ls_x, ds.ls_y, ds.rs_x, ds.rs_y, ds.lt, ds.rt, ds.buttons.a, ds.buttons.b, ds.buttons.y, ds.buttons.x, ds.buttons.lb, ds.buttons.rb, ds.buttons.lt, ds.buttons.rt, ds.buttons.back, ds.buttons.start, ds.buttons.ls, ds.buttons.rs, ds.buttons.ps, ds.buttons.touchpad, ds.buttons.mute, ds.buttons.dpad, ds.gyro_x, ds.gyro_y, ds.gyro_z, ds.accel_x, ds.accel_y, ds.accel_z, ds.sensor_timestamp, ds.points_1.contact, ds.points_1.x, ds.points_1.y, ds.points_2.contact, ds.points_2.x, ds.points_2.y);
   uart_puts(UART_ID, display_buffer);
@@ -105,8 +105,8 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
     #define AXIS_CENTER 128 // 中心位置
     #define AXIS_DEAD_ZONE 6 // 死区
     #define REPORT_RATE 100 // 报告率
-    #define ls_map_wheel_speed 0.0005f // 滚轮映射速度系数
-    #define rs_map_mouse_speed 0.4f // 鼠标映射速度系数
+    #define ls_map_wheel_speed 0.064f // 滚轮映射速度系数
+    #define rs_map_mouse_speed 8.0f // 鼠标映射速度系数
     #define touchpad_map_wheel_speed 0.03f // 触摸板映射速度系数
     #define touchpad_map_mouse_speed 1.0f // 触摸板映射速度系数
     const uint64_t INTERVAL_US = 100000 / REPORT_RATE;
@@ -128,62 +128,65 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
             counter++;
             // absolute_time_t start_time = get_absolute_time();
             mutex_enter_blocking( & my_mutex);
+            memcpy(&ds_now, &ds, sizeof(ds));
+            mutex_exit( & my_mutex);// 在上锁状态下，复制最新的ds状态
+
             // absolute_time_t mutex_enter_time = get_absolute_time();
             /*----------滚轮部分----------*/
-            if (((ds.ls_y - AXIS_CENTER) * (ds.ls_y - AXIS_CENTER) < AXIS_DEAD_ZONE * AXIS_DEAD_ZONE)) {
+            if (((ds_now.ls_y - AXIS_CENTER) * (ds_now.ls_y - AXIS_CENTER) < AXIS_DEAD_ZONE * AXIS_DEAD_ZONE)) {
                 ls_y = 0;
                 current_speed_wheel = 0.0f;
             } else {
-                ls_y = (int32_t) ds.ls_y;
-                current_speed_wheel = (ls_y - AXIS_CENTER) * (ls_y - AXIS_CENTER) * ls_map_wheel_speed / 128.0f;
+                ls_y = (int32_t) ds_now.ls_y;
+                current_speed_wheel = (ls_y - AXIS_CENTER) * (ls_y - AXIS_CENTER) * ls_map_wheel_speed / 16384.0f;
                 wheel_move -= (ls_y > AXIS_CENTER ? current_speed_wheel : -current_speed_wheel);
             }
             /*----------鼠标部分----------*/
-            if (((ds.rs_x - AXIS_CENTER) * (ds.rs_x - AXIS_CENTER) + (ds.rs_y - AXIS_CENTER) * (ds.rs_y - AXIS_CENTER) < AXIS_DEAD_ZONE * AXIS_DEAD_ZONE)) {
+            if (((ds_now.rs_x - AXIS_CENTER) * (ds_now.rs_x - AXIS_CENTER) + (ds_now.rs_y - AXIS_CENTER) * (ds_now.rs_y - AXIS_CENTER) < AXIS_DEAD_ZONE * AXIS_DEAD_ZONE)) {
                 current_speed_x = 0.0f;
                 current_speed_y = 0.0f;
             } else {
-                rs_x = (int32_t) ds.rs_x;
-                rs_y = (int32_t) ds.rs_y;
-                current_speed_x = float((rs_x - AXIS_CENTER) * (rs_x - AXIS_CENTER)) * rs_map_mouse_speed / 128.0f;
-                current_speed_y = float((rs_y - AXIS_CENTER) * (rs_y - AXIS_CENTER)) * rs_map_mouse_speed / 128.0f;
+                rs_x = (int32_t) ds_now.rs_x;
+                rs_y = (int32_t) ds_now.rs_y;
+                current_speed_x = float((rs_x - AXIS_CENTER) * (rs_x - AXIS_CENTER)) * rs_map_mouse_speed / 16384.0f;
+                current_speed_y = float((rs_y - AXIS_CENTER) * (rs_y - AXIS_CENTER)) * rs_map_mouse_speed / 16384.0f;
                 x_move += (rs_x > AXIS_CENTER ? current_speed_x : -current_speed_x);
                 y_move += (rs_y > AXIS_CENTER ? current_speed_y : -current_speed_y);
                 // debug("current_speed_x:%.2f current_speed_y:%.2f\n", current_speed_x, current_speed_y);
             }
             /*----------按键部分----------*/
-            if(ds.buttons.rt && !ds_last.buttons.rt){
+            if(ds_now.buttons.rt && !ds_last.buttons.rt){
                 hid_mouse_button_down(MouseBtnLeft);
             }
-            if(!ds.buttons.rt && ds_last.buttons.rt){
+            if(!ds_now.buttons.rt && ds_last.buttons.rt){
                 hid_mouse_button_up(MouseBtnLeft);
             }
-            if(ds.buttons.lt && !ds_last.buttons.lt){
+            if(ds_now.buttons.lt && !ds_last.buttons.lt){
                 hid_mouse_button_down(MouseBtnRight);
             }
-            if(!ds.buttons.lt && ds_last.buttons.lt){
+            if(!ds_now.buttons.lt && ds_last.buttons.lt){
                 hid_mouse_button_up(MouseBtnRight);
             }
-            if(ds.buttons.a && !ds_last.buttons.a){
+            if(ds_now.buttons.a && !ds_last.buttons.a){
                 hid_key_down(KeyEnter);
             }
-            if(!ds.buttons.a && ds_last.buttons.a){
+            if(!ds_now.buttons.a && ds_last.buttons.a){
                 hid_key_up(KeyEnter);
             }
-            if(ds.buttons.b && !ds_last.buttons.b){
+            if(ds_now.buttons.b && !ds_last.buttons.b){
                 hid_key_down(KeyEscape);
             }
-            if(!ds.buttons.b && ds_last.buttons.b){
+            if(!ds_now.buttons.b && ds_last.buttons.b){
                 hid_key_up(KeyEscape);
             }
-            if(ds.buttons.touchpad && !ds_last.buttons.touchpad){
+            if(ds_now.buttons.touchpad && !ds_last.buttons.touchpad){
                 hid_mouse_button_down(MouseBtnLeft);
             }
-            if(!ds.buttons.touchpad && ds_last.buttons.touchpad){
+            if(!ds_now.buttons.touchpad && ds_last.buttons.touchpad){
                 hid_mouse_button_up(MouseBtnLeft);
             }
             /*----------DPAD部分----------*/
-            uint8_t dapd_now = 0x098C46231ULL >> (ds.buttons.dpad * 4) & 0x0f;
+            uint8_t dapd_now = 0x098C46231ULL >> (ds_now.buttons.dpad * 4) & 0x0f;
             uint8_t dapd_last = 0x098C46231ULL >> (ds_last.buttons.dpad * 4) & 0x0f;
             uint8_t pressed = dapd_now & ~dapd_last;
             uint8_t released = ~dapd_now & dapd_last;
@@ -212,17 +215,17 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
               hid_key_up(KeyLeft);
             }
             /*----------触摸板部分----------*/
-            bool state1 = (ds.points_1.contact & 0x80) == 0;
-            uint8_t id1 = ds.points_1.contact & 0x7f;
-            bool state2 = (ds.points_2.contact & 0x80) == 0;
-            uint8_t id2 = ds.points_2.contact & 0x7f;
+            bool state1 = (ds_now.points_1.contact & 0x80) == 0;
+            uint8_t id1 = ds_now.points_1.contact & 0x7f;
+            bool state2 = (ds_now.points_2.contact & 0x80) == 0;
+            uint8_t id2 = ds_now.points_2.contact & 0x7f;
             bool last_state1 = (ds_last.points_1.contact & 0x80) == 0;
             uint8_t l_id1 = ds_last.points_1.contact & 0x7f;
             bool last_state2 = (ds_last.points_2.contact & 0x80) == 0;
             uint8_t l_id2 = ds_last.points_2.contact & 0x7f;
             if (state1 && state2) {
                 if (last_state1 && last_state2 && id1 == l_id1 && id2 == l_id2) {
-                    float current_mid_y = (ds.points_1.y + ds.points_2.y) / 2.0f;
+                    float current_mid_y = (ds_now.points_1.y + ds_now.points_2.y) / 2.0f;
                     float last_mid_y = (ds_last.points_1.y + ds_last.points_2.y) / 2.0f;
                     wheel_move -= (last_mid_y - current_mid_y) * touchpad_map_wheel_speed;
                 } else {
@@ -235,15 +238,15 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
                 if (state1) {
                     // 只有第一点在，且上一帧第一点也在，且 ID 没变，且上一帧没有第二点干扰
                     if (last_state1 && !last_state2 && id1 == l_id1) {
-                        x_move += (float)(ds.points_1.x - ds_last.points_1.x) * touchpad_map_mouse_speed;
-                        y_move += (float)(ds.points_1.y - ds_last.points_1.y) * touchpad_map_mouse_speed;
+                        x_move += (float)(ds_now.points_1.x - ds_last.points_1.x) * touchpad_map_mouse_speed;
+                        y_move += (float)(ds_now.points_1.y - ds_last.points_1.y) * touchpad_map_mouse_speed;
                     }
                 } 
                 else if (state2) {
                     // 只有第二点在（比如第一根手指抬起了），逻辑同上
                     if (last_state2 && !last_state1 && id2 == l_id2) {
-                        x_move += (float)(ds.points_2.x - ds_last.points_2.x) * touchpad_map_mouse_speed;
-                        y_move += (float)(ds.points_2.y - ds_last.points_2.y) * touchpad_map_mouse_speed;
+                        x_move += (float)(ds_now.points_2.x - ds_last.points_2.x) * touchpad_map_mouse_speed;
+                        y_move += (float)(ds_now.points_2.y - ds_last.points_2.y) * touchpad_map_mouse_speed;
                     }
                 }
                 wheel_move = 0;
@@ -251,8 +254,6 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
             else {
             }
             /*----------OVER----------*/
-            memcpy( & ds_last, & ds, sizeof(ds));
-            mutex_exit( & my_mutex);
             int8_t report_x = (int8_t) x_move;
             int8_t report_y = (int8_t) y_move;
             int8_t report_wheel = (int8_t) wheel_move;
@@ -268,6 +269,8 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
             // absolute_time_t finish_time = get_absolute_time();
             // debug("mutex_enter_time:%d exec_time:%d\n", absolute_time_diff_us(start_time, mutex_enter_time), absolute_time_diff_us(finish_time, mutex_enter_time));
         }
+
+        memcpy( & ds_last, & ds_now, sizeof(ds));//更新上一帧状态
         next_run_time = delayed_by_us(next_run_time, INTERVAL_US);
         busy_wait_until(next_run_time);
     }
