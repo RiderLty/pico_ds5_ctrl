@@ -162,8 +162,27 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
             uint8_t dpad_pressed = dapd_now & ~dapd_last;
             uint8_t dpad_released = ~dapd_now & dapd_last;
 
-            if(ds_now.buttons.ps){//PS按下的状态
-                
+            if(ds_now.buttons.mute ){//静音键按下的状态
+                if(ds_now.buttons.x){
+                    rs_map_mouse_speed -=0.005f;
+                    rs_map_mouse_speed = rs_map_mouse_speed < 0.005f ? 0.005f : rs_map_mouse_speed;
+                    debug("mouse:%.5f\n", rs_map_mouse_speed);
+                }
+                if(ds_now.buttons.b){
+                    rs_map_mouse_speed +=0.005f;
+                    rs_map_mouse_speed = rs_map_mouse_speed > 127.0f ? 127.0f : rs_map_mouse_speed;
+                    debug("mouse:%.5f\n", rs_map_mouse_speed);
+                }
+                if(ds_now.buttons.a){
+                    ls_map_wheel_speed -=0.00005f;
+                    ls_map_wheel_speed = ls_map_wheel_speed < 0.0001f ? 0.0001f : ls_map_wheel_speed;
+                    debug("wheel:%.5f\n", ls_map_wheel_speed);
+                }
+                if(ds_now.buttons.y){
+                    ls_map_wheel_speed +=0.00005f;
+                    ls_map_wheel_speed = ls_map_wheel_speed > 0.5f ? 0.5f : ls_map_wheel_speed;
+                    debug("wheel:%.5f\n", ls_map_wheel_speed);
+                }
             }else{
                 if(ds_now.buttons.rt && !ds_last.buttons.rt){
                     hid_mouse_button_down(MouseBtnLeft);
@@ -195,8 +214,8 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
                 if(!ds_now.buttons.touchpad && ds_last.buttons.touchpad){
                     hid_mouse_button_up(MouseBtnLeft);
                 }
-                if(!ds_now.buttons.mute && ds_last.buttons.mute){
-                    debug("Mute button released, restarting device.\n");
+                if(ds_now.buttons.ps && !ds_now.buttons.mute && ds_last.buttons.mute){//PS按下且静音键松开 重启
+                    debug("restarting device.\n");
                     sleep_ms(100);
                     watchdog_reboot(0, 0, 0);
                 }
