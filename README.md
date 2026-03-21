@@ -22,7 +22,7 @@
 
 1. **克隆项目**
    ```bash
-   git clone <项目地址>
+   git clone https://github.com/RiderLty/pico_ds5_ctrl
    cd pico_ds5_ctrl
    ```
 
@@ -37,8 +37,8 @@
 4. **编译项目**
    ```bash
    mkdir build && cd build
-   cmake ..
-   make
+   cmake -DPICO_BOARD=pico2_w ..
+   make -j
    ```
 
 5. **烧录固件**
@@ -116,4 +116,4 @@
 
 ## 致谢
 
-[蓝牙部分代码来自](https://github.com/awalol/DS5Dongle)
+[蓝牙部分代码来自awalol](https://github.com/awalol/DS5Dongle)
