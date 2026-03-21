@@ -9,6 +9,9 @@ project(pico_ds5_ctrl C CXX ASM)
 # 初始化 SDK (这步完成后，pico_add_extra_outputs 才会生效)
 pico_sdk_init()
 
+add_subdirectory(lib/pico-kvstore)
+
+
 add_executable(pico_ds5_ctrl
     main.cpp
     bt.cpp
@@ -38,6 +41,8 @@ target_link_libraries(pico_ds5_ctrl PUBLIC
     pico_cyw43_arch_poll
     pico_btstack_cyw43
     hardware_interp
+    kvstore
+    kvstore_default
 )
 
 pico_add_extra_outputs(pico_ds5_ctrl)
