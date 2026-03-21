@@ -147,13 +147,14 @@ void get_speed(float *s1, float *s2, float *s3, float *s4){
 #define AXIS_DEAD_ZONE 6 // 死区
 #define REPORT_RATE 100 // 报告率
 
-static float ls_map_wheel_speed; // 滚轮映射速度系数
-static float rs_map_mouse_speed; // 鼠标映射速度系数
-static float touchpad_map_wheel_speed; // 触摸板映射速度系数
-static float touchpad_map_mouse_speed; // 触摸板映射速度系数
-static absolute_time_t last_write_time; // 上次写入时间
-static bool need_set_speed = false; // 是否需要写入映射速度系数
+static  float ls_map_wheel_speed; // 滚轮映射速度系数
+static  float rs_map_mouse_speed; // 鼠标映射速度系数
+static  float touchpad_map_wheel_speed; // 触摸板映射速度系数
+static  float touchpad_map_mouse_speed; // 触摸板映射速度系数
+static  absolute_time_t last_write_time; // 上次写入时间
+static  bool need_set_speed = false; // 是否需要写入映射速度系数
 void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
+    multicore_lockout_victim_init();
     uint32_t counter = 0;
     const uint64_t INTERVAL_US = 100000 / REPORT_RATE;
     absolute_time_t next_run_time = get_absolute_time();
@@ -429,9 +430,10 @@ int main(void)
     if(need_set_speed){
         if(absolute_time_diff_us(last_write_time, get_absolute_time()) >= 3 * 1000000){//等待3s后设置速度
             debug("write ls_map_wheel_speed: %f, rs_map_mouse_speed: %f, touchpad_map_wheel_speed: %f, touchpad_map_mouse_speed: %f\n", ls_map_wheel_speed, rs_map_mouse_speed, touchpad_map_wheel_speed, touchpad_map_mouse_speed);
+            multicore_lockout_start_blocking();
             set_speed(ls_map_wheel_speed, rs_map_mouse_speed, touchpad_map_wheel_speed, touchpad_map_mouse_speed);
-            need_set_speed = false;
-
+            multicore_lockout_end_blocking();
+            need_set_speed = false; 
         }
     }
   }
