@@ -50,9 +50,8 @@ extern "C" {
 #define UART_TX_PIN 4
 #define UART_RX_PIN 5
 
-static uint8_t ready = 0;
-
-
+static volatile uint8_t ready = 0;
+static volatile uint32_t core1_last_heartbeat = 0;
 static struct dualsense_input_report ds ,ds_now, ds_last;
 // char display_buffer[500];
 // void display_dsinfo(){
@@ -145,7 +144,7 @@ void get_speed(float *s1, float *s2, float *s3, float *s4){
 
 #define AXIS_CENTER 128 // 中心位置
 #define AXIS_DEAD_ZONE 6 // 死区
-#define REPORT_RATE 100 // 报告率
+#define REPORT_RATE 1000 // 报告率
 
 static  float ls_map_wheel_speed; // 滚轮映射速度系数
 static  float rs_map_mouse_speed; // 鼠标映射速度系数
@@ -156,7 +155,7 @@ static  bool need_set_speed = false; // 是否需要写入映射速度系数
 void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
     multicore_lockout_victim_init();
     uint32_t counter = 0;
-    const uint64_t INTERVAL_US = 100000 / REPORT_RATE;
+    const uint64_t INTERVAL_US = 1000000 / REPORT_RATE;
     absolute_time_t next_run_time = get_absolute_time();
     float current_speed_x = 0;
     float current_speed_y = 0;
@@ -169,6 +168,7 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
     int32_t rs_x = 0;
     int32_t rs_y = 0;
     while (1) {
+        core1_last_heartbeat++;
         if (ready) {
             counter++;
             // absolute_time_t start_time = get_absolute_time();
@@ -422,11 +422,12 @@ int main(void)
   bt_register_data_callback(on_bt_data);
   bt_register_event_callback(on_bt_event);
   multicore_launch_core1(mouse_keyboard_ctr_taskl);
+  uint32_t core1_last_heartbeat_record = 0;
+  absolute_time_t ckeck_core1_alive_time = get_absolute_time();
   while (1)
   {
     cyw43_arch_poll();
     tud_task(); // tinyusb device task
-    
     if(need_set_speed){
         if(absolute_time_diff_us(last_write_time, get_absolute_time()) >= 3 * 1000000){//等待3s后设置速度
             debug("write ls_map_wheel_speed: %f, rs_map_mouse_speed: %f, touchpad_map_wheel_speed: %f, touchpad_map_mouse_speed: %f\n", ls_map_wheel_speed, rs_map_mouse_speed, touchpad_map_wheel_speed, touchpad_map_mouse_speed);
@@ -435,6 +436,18 @@ int main(void)
             multicore_lockout_end_blocking();
             need_set_speed = false; 
         }
+    }
+    if(absolute_time_diff_us(ckeck_core1_alive_time, get_absolute_time()) >= 1000 * 200){//每隔200ms 检查core1是否存活
+        if(core1_last_heartbeat_record == core1_last_heartbeat){
+            debug("core1 not alive, reset it\n");
+            multicore_reset_core1();
+            multicore_launch_core1(mouse_keyboard_ctr_taskl);
+        }
+        // else{
+        //     debug("core1 alive %d vs %d\n", core1_last_heartbeat_record, core1_last_heartbeat);
+        // }
+        core1_last_heartbeat_record = core1_last_heartbeat;
+        ckeck_core1_alive_time = get_absolute_time();
     }
   }
 }
