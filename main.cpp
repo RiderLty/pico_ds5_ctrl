@@ -142,8 +142,8 @@ void get_speed(float *s1, float *s2, float *s3, float *s4){
 #define DEFAULT_TOUCHPAD_MAP_WHEEL_SPEED 0.03f // 默认触摸板映射速度系数
 #define DEFAULT_TOUCHPAD_MAP_MOUSE_SPEED 1.0f // 默认触摸板映射速度系数
 
-#define AXIS_CENTER 128 // 中心位置
-#define AXIS_DEAD_ZONE 6 // 死区
+#define AXIS_CENTER 256 // 中心位置
+#define AXIS_DEAD_ZONE 12 // 死区 是缩放过的区域
 #define REPORT_RATE 1000 // 报告率
 
 static  float ls_map_wheel_speed; // 滚轮映射速度系数
@@ -175,26 +175,27 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
             mutex_enter_blocking( & my_mutex);
             memcpy(&ds_now, &ds, sizeof(ds));
             mutex_exit( & my_mutex);// 在上锁状态下，复制最新的ds状态
+            ls_x = (int32_t) ds_now.ls_x << 1;
+            ls_y = (int32_t) ds_now.ls_y << 1;
+            rs_x = (int32_t) ds_now.rs_x << 1;
+            rs_y = (int32_t) ds_now.rs_y << 1;//缩放到0~512
 
             // absolute_time_t mutex_enter_time = get_absolute_time();
             /*----------滚轮部分----------*/
-            if (((ds_now.ls_y - AXIS_CENTER) * (ds_now.ls_y - AXIS_CENTER) < AXIS_DEAD_ZONE * AXIS_DEAD_ZONE)) {
+            if (((ls_x - AXIS_CENTER) * (ls_x - AXIS_CENTER) + (ls_y - AXIS_CENTER) * (ls_y - AXIS_CENTER) < AXIS_DEAD_ZONE * AXIS_DEAD_ZONE)) {
                 ls_y = 0;
                 current_speed_wheel = 0.0f;
             } else {
-                ls_y = (int32_t) ds_now.ls_y;
-                current_speed_wheel = (ls_y - AXIS_CENTER) * (ls_y - AXIS_CENTER) * ls_map_wheel_speed / 16384.0f;
+                current_speed_wheel = (ls_y - AXIS_CENTER) * (ls_y - AXIS_CENTER) * ls_map_wheel_speed / 65536.0f;
                 wheel_move -= (ls_y > AXIS_CENTER ? current_speed_wheel : -current_speed_wheel);
             }
             /*----------鼠标部分----------*/
-            if (((ds_now.rs_x - AXIS_CENTER) * (ds_now.rs_x - AXIS_CENTER) + (ds_now.rs_y - AXIS_CENTER) * (ds_now.rs_y - AXIS_CENTER) < AXIS_DEAD_ZONE * AXIS_DEAD_ZONE)) {
+            if (((rs_x - AXIS_CENTER) * (rs_x - AXIS_CENTER) + (rs_y - AXIS_CENTER) * (rs_y - AXIS_CENTER) < AXIS_DEAD_ZONE * AXIS_DEAD_ZONE)) {
                 current_speed_x = 0.0f;
                 current_speed_y = 0.0f;
             } else {
-                rs_x = (int32_t) ds_now.rs_x;
-                rs_y = (int32_t) ds_now.rs_y;
-                current_speed_x = float((rs_x - AXIS_CENTER) * (rs_x - AXIS_CENTER)) * rs_map_mouse_speed / 16384.0f;
-                current_speed_y = float((rs_y - AXIS_CENTER) * (rs_y - AXIS_CENTER)) * rs_map_mouse_speed / 16384.0f;
+                current_speed_x = float((rs_x - AXIS_CENTER) * (rs_x - AXIS_CENTER)) * rs_map_mouse_speed / 65536.0f;
+                current_speed_y = float((rs_y - AXIS_CENTER) * (rs_y - AXIS_CENTER)) * rs_map_mouse_speed / 65536.0f;
                 x_move += (rs_x > AXIS_CENTER ? current_speed_x : -current_speed_x);
                 y_move += (rs_y > AXIS_CENTER ? current_speed_y : -current_speed_y);
                 // debug("current_speed_x:%.2f current_speed_y:%.2f\n", current_speed_x, current_speed_y);
@@ -311,28 +312,28 @@ void mouse_keyboard_ctr_taskl() { // 鼠标键盘控制任务
       
                 /*----------DPAD部分----------*/
                 if(dpad_pressed & DPAD_UP){
-                hid_key_down(KeyUp);
+                    hid_key_down(KeyUp);
                 }
                 if(dpad_released & DPAD_UP){
-                hid_key_up(KeyUp);
+                    hid_key_up(KeyUp);
                 }
                 if(dpad_pressed & DPAD_RIGHT){
-                hid_key_down(KeyRight);
+                    hid_key_down(KeyRight);
                 }
                 if(dpad_released & DPAD_RIGHT){
-                hid_key_up(KeyRight);
+                    hid_key_up(KeyRight);
                 }
                 if(dpad_pressed & DPAD_DOWN){
-                hid_key_down(KeyDown);
+                    hid_key_down(KeyDown);
                 }
                 if(dpad_released & DPAD_DOWN){
-                hid_key_up(KeyDown);
+                    hid_key_up(KeyDown);
                 }
                 if(dpad_pressed & DPAD_LEFT){
-                hid_key_down(KeyLeft);
+                    hid_key_down(KeyLeft);
                 }
                 if(dpad_released & DPAD_LEFT){
-                hid_key_up(KeyLeft);
+                    hid_key_up(KeyLeft);
                 }
             }
             /*----------触摸板部分----------*/
